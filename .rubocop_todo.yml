@@ -1,0 +1,9 @@
+Metrics/BlockLength:
+  Enabled: false
+
+Metrics/LineLength:
+  Enabled: false
+
+Style/GlobalVars:
+  Exclude:
+    - 'ext/libdeflate/extconf.rb'
