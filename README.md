@@ -32,7 +32,7 @@ compressor = Libdeflate::Compressor.new
 compressed_string = compressor.compress('Hello, World!')
 
 decompressor = Libdeflate::Decompressor.new
-decompressed_string = decompressor.decompress(compressed_string)
+decompressor.decompress(compressed_string)
 ```
 
 ## Development
