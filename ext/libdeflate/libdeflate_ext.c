@@ -135,7 +135,7 @@ rb_compressor_initialize(int argc, VALUE *argv, VALUE self)
 static inline struct libdeflate_compressor *
 check_compressor(VALUE self)
 {
-      return rb_check_typeddata(self, &compressor_data_type);
+    return rb_check_typeddata(self, &compressor_data_type);
 }
 
 /*
@@ -267,22 +267,23 @@ rb_decompressor_initialize(VALUE self)
 static inline struct libdeflate_decompressor *
 check_decompressor(VALUE self)
 {
-      return rb_check_typeddata(self, &decompressor_data_type);
+    return rb_check_typeddata(self, &decompressor_data_type);
 }
 
 static long
-next_power_of_two(long n) {
-  n--;
-  n |= n >> 1;
-  n |= n >> 2;
-  n |= n >> 4;
-  n |= n >> 8;
-  n |= n >> 16;
+next_power_of_two(long n)
+{
+    n--;
+    n |= n >> 1;
+    n |= n >> 2;
+    n |= n >> 4;
+    n |= n >> 8;
+    n |= n >> 16;
 #if LONG_MAX > UINT32_MAX
-  n |= n >> 32;
+    n |= n >> 32;
 #endif
-  n++;
-  return n;
+    n++;
+    return n;
 }
 
 /*
@@ -293,8 +294,10 @@ next_power_of_two(long n) {
  * <i>format</i> are DEFLATE (default), ZLIB and GZIP. If <i>outbuf</i> is
  * given, the resulting uncompressed data will be written to it.
  *
- *    decompressor.decompress("\x01\x03\x00\xFC\xFFfoo")                                     #=> "foo"
- *    decompressor.decompress("x\x9C\x01\x03\x00\xFC\xFFfoo\x02\x82\x01E", Libdeflate::ZLIB) #=> "foo"
+ *    decompressor.decompress("\x01\x03\x00\xFC\xFFfoo")
+ *    #=> "foo"
+ *    decompressor.decompress("x\x9C\x01\x03\x00\xFC\xFFfoo\x02\x82\x01E", Libdeflate::ZLIB)
+ *    #=> "foo"
  *
  *    outbuf = 'bar'
  *    decompressor.decompress("\x01\x03\x00\xFC\xFFfoo", nil, outbuf) #=> "foo"
