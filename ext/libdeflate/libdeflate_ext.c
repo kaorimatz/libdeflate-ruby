@@ -370,8 +370,32 @@ Init_libdeflate_ext(void)
     rb_eLibdefalteError = rb_define_class_under(rb_mLibdeflate, "Error", rb_eStandardError);
     rb_eBadDataError = rb_define_class_under(rb_mLibdeflate, "BadDataError", rb_eLibdefalteError);
 
+    /*
+     * Default compression level which is a compromise between speed and compression ratio
+     *
+     * See Compressor#initialize.
+     */
+    rb_define_const(rb_mLibdeflate, "DEFAULT_COMPRESSION", INT2FIX(DEFAULT_COMPRESSION));
+
+    /*
+     * DEFLATE compressed data format
+     *
+     * See Compressor#compress and Decompressor#decompress.
+     */
     rb_define_const(rb_mLibdeflate, "DEFLATE", INT2FIX(FORMAT_DEFLATE));
+
+    /*
+     * ZLIB compressed data format
+     *
+     * See Compressor#compress and Decompressor#decompress.
+     */
     rb_define_const(rb_mLibdeflate, "ZLIB", INT2FIX(FORMAT_ZLIB));
+
+    /*
+     * GZIP compressed data format
+     *
+     * See Compressor#compress and Decompressor#decompress.
+     */
     rb_define_const(rb_mLibdeflate, "GZIP", INT2FIX(FORMAT_GZIP));
 
     rb_define_module_function(rb_mLibdeflate, "adler32", rb_libdeflate_adler32, -1);
