@@ -23,6 +23,8 @@ Gem::Specification.new do |spec|
   spec.require_paths = ['lib']
   spec.extensions    = ['ext/libdeflate/extconf.rb']
 
+  spec.add_runtime_dependency 'mini_portile2', '>= 2.2.0'
+
   spec.add_development_dependency 'benchmark-ips'
   spec.add_development_dependency 'bundler'
   spec.add_development_dependency 'coveralls'

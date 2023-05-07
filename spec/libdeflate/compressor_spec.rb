@@ -6,7 +6,7 @@ RSpec.describe Libdeflate::Compressor do
   describe '#initialize' do
     context 'when level is out of range' do
       it 'raises an error' do
-        expect { described_class.new(0) }.to raise_error(Libdeflate::Error)
+        expect { described_class.new(-1) }.to raise_error(Libdeflate::Error)
         expect { described_class.new(13) }.to raise_error(Libdeflate::Error)
       end
     end
