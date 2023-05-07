@@ -1,7 +1,6 @@
 # libdeflate-ruby
 
 [![Gem](https://img.shields.io/gem/v/libdeflate.svg?style=flat-square)](https://rubygems.org/gems/libdeflate)
-[![Coveralls](https://img.shields.io/coveralls/kaorimatz/libdeflate-ruby.svg?style=flat-square)](https://coveralls.io/github/kaorimatz/libdeflate-ruby)
 [![Gemnasium](https://img.shields.io/gemnasium/kaorimatz/libdeflate-ruby.svg?style=flat-square)](https://gemnasium.com/kaorimatz/libdeflate-ruby)
 
 Ruby bindings for [libdeflate](https://github.com/ebiggers/libdeflate).
