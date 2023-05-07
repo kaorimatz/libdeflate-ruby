@@ -4,18 +4,6 @@ RSpec.describe Libdeflate::Decompressor do
   let(:decompressor) { described_class.new }
 
   describe '#decompress' do
-    context 'when str is not tainted' do
-      it 'decompresses the given string and doesn\'t taints the result' do
-        expect(decompressor.decompress("\x01\x03\x00\xFC\xFFfoo")).not_to be_tainted
-      end
-    end
-
-    context 'when str is tainted' do
-      it 'decompresses the given string and taints the result' do
-        expect(decompressor.decompress("\x01\x03\x00\xFC\xFFfoo".taint)).to be_tainted
-      end
-    end
-
     context 'when str is invalid' do
       it 'raises BadDataError' do
         expect { decompressor.decompress('foo') }.to raise_error(Libdeflate::BadDataError)

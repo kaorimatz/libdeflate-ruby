@@ -13,18 +13,6 @@ RSpec.describe Libdeflate::Compressor do
   end
 
   describe '#compress' do
-    context 'when str is not tainted' do
-      it 'compresses the given string and doesn\'t taints the result' do
-        expect(compressor.compress('foo')).not_to be_tainted
-      end
-    end
-
-    context 'when str is tainted' do
-      it 'compresses the given string and taints the result' do
-        expect(compressor.compress('foo'.taint)).to be_tainted
-      end
-    end
-
     context 'when format is nil' do
       it 'compresses the given string into deflate format' do
         expect(compressor.compress('foo')).to eq("\x01\x03\x00\xFC\xFFfoo".b)

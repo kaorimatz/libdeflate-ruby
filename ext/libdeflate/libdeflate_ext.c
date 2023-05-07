@@ -198,7 +198,6 @@ rb_compressor_compress(int argc, VALUE *argv, VALUE self)
 
     if (out_nbytes > 0) {
         rb_str_set_len(outbuf, out_nbytes);
-        OBJ_INFECT(outbuf, str);
         return outbuf;
     }
 
@@ -220,7 +219,6 @@ rb_compressor_compress(int argc, VALUE *argv, VALUE self)
     }
 
     rb_str_set_len(outbuf, out_nbytes);
-    OBJ_INFECT(outbuf, str);
 
     return outbuf;
 }
@@ -359,7 +357,6 @@ rb_compressor_decompress(int argc, VALUE *argv, VALUE self)
     }
 
     rb_str_set_len(outbuf, actual_out_nbytes_ret);
-    OBJ_INFECT(outbuf, str);
 
     return outbuf;
 }
