@@ -84,22 +84,45 @@ rb_libdeflate_crc32(int argc, VALUE *argv, VALUE self)
     return ULONG2NUM(checksum);
 }
 
+/*
+ * Inputs at least this long are compressed without the GVL,
+ * so other Ruby threads run meanwhile. Below it, releasing and reacquiring the
+ * GVL costs more than the work.
+ */
+#define NOGVL_MIN_BYTES 16384
+
+struct compressor {
+    struct libdeflate_compressor *c;
+    int level;
+};
+
 static void
 compressor_free(void *ptr)
 {
-    libdeflate_free_compressor((struct libdeflate_compressor *)ptr);
+    struct compressor *compressor = ptr;
+
+    libdeflate_free_compressor(compressor->c);
+    xfree(compressor);
+}
+
+static size_t
+compressor_memsize(const void *ptr)
+{
+    return sizeof(struct compressor);
 }
 
 static const rb_data_type_t compressor_data_type = {
     "compressor",
-    { NULL, compressor_free, NULL, },
+    { NULL, compressor_free, compressor_memsize, },
     0, 0, RUBY_TYPED_FREE_IMMEDIATELY
 };
 
 static VALUE
 rb_compressor_s_allocate(VALUE klass)
 {
-    return TypedData_Wrap_Struct(klass, &compressor_data_type, 0);
+    struct compressor *compressor;
+
+    return TypedData_Make_Struct(klass, struct compressor, &compressor_data_type, compressor);
 }
 
 /*
@@ -116,26 +139,71 @@ rb_compressor_initialize(int argc, VALUE *argv, VALUE self)
 {
     VALUE level;
     int compression_level;
+    struct compressor *compressor = rb_check_typeddata(self, &compressor_data_type);
     struct libdeflate_compressor *c;
 
     rb_scan_args(argc, argv, "01", &level);
 
-    compression_level = NIL_P(level) ? DEFAULT_COMPRESSION : FIX2INT(level);
+    compression_level = NIL_P(level) ? DEFAULT_COMPRESSION : NUM2INT(level);
 
     c = libdeflate_alloc_compressor(compression_level);
     if (c == NULL) {
         rb_raise(rb_eLibdefalteError, "libdeflate_alloc_compressor: compression_level=%d", compression_level);
     }
 
-    DATA_PTR(self) = c;
+    if (compressor->c != NULL) {
+        libdeflate_free_compressor(compressor->c);
+    }
+    compressor->c = c;
+    compressor->level = compression_level;
 
     return self;
 }
 
-static inline struct libdeflate_compressor *
+static inline struct compressor *
 check_compressor(VALUE self)
 {
-    return rb_check_typeddata(self, &compressor_data_type);
+    struct compressor *compressor = rb_check_typeddata(self, &compressor_data_type);
+
+    if (compressor->c == NULL) {
+        rb_raise(rb_eLibdefalteError, "uninitialized compressor");
+    }
+
+    return compressor;
+}
+
+struct compress_args {
+    int level;
+    size_t (*func)(struct libdeflate_compressor *, const void *, size_t, void *, size_t);
+    const void *in;
+    size_t in_nbytes;
+    void *out;
+    size_t out_nbytes_avail;
+    size_t result;
+};
+
+/*
+ * Runs without the GVL. The input is a frozen string and the output a string
+ * no other thread has seen, so neither changes meanwhile. It compresses with a
+ * libdeflate compressor of its own rather than locking the shared one: the
+ * lock would stay held until this thread got the GVL back, and every other call
+ * on the compressor would wait for that handoff. The shared one is only used
+ * with the GVL held, which serializes those calls.
+ */
+static void *
+compress_without_gvl(void *ptr)
+{
+    struct compress_args *args = ptr;
+    struct libdeflate_compressor *c = libdeflate_alloc_compressor(args->level);
+
+    if (c == NULL) {
+        return NULL;
+    }
+
+    args->result = args->func(c, args->in, args->in_nbytes, args->out, args->out_nbytes_avail);
+    libdeflate_free_compressor(c);
+
+    return args;
 }
 
 /*
@@ -145,6 +213,10 @@ check_compressor(VALUE self)
  * Compresses the given string into <i>format</i>. Valid values of <i>format</i>
  * are DEFLATE (default), ZLIB and GZIP. If <i>outbuf</i> is given, the
  * resulting compressed data will be written to it.
+ *
+ * Strings of 16 KiB or more are compressed without holding the GVL, so other
+ * threads keep running, and threads sharing a compressor compress them in
+ * parallel.
  *
  *    compressor.compress('foo')                   #=> "\x01\x03\x00\xFC\xFFfoo"
  *    compressor.compress('foo', Libdeflate::ZLIB) #=> "x\x9C\x01\x03\x00\xFC\xFFfoo\x02\x82\x01E"
@@ -156,11 +228,10 @@ check_compressor(VALUE self)
 static VALUE
 rb_compressor_compress(int argc, VALUE *argv, VALUE self)
 {
-    struct libdeflate_compressor *c = check_compressor(self);
-    VALUE str, format, outbuf;
-    size_t (*compress_func)(struct libdeflate_compressor *, const void *, size_t, void *, size_t);
+    struct compressor *compressor = check_compressor(self);
+    struct compress_args args;
+    VALUE str, format, outbuf, in, out;
     size_t (*compress_bound_func)(struct libdeflate_compressor *, size_t);
-    size_t out_nbytes, max_out_nbytes;
 
     rb_scan_args(argc, argv, "12", &str, &format, &outbuf);
 
@@ -168,57 +239,57 @@ rb_compressor_compress(int argc, VALUE *argv, VALUE self)
 
     switch (NIL_P(format) ? FORMAT_DEFLATE : FIX2INT(format)) {
         case FORMAT_DEFLATE:
-            compress_func = &libdeflate_deflate_compress;
+            args.func = &libdeflate_deflate_compress;
             compress_bound_func = &libdeflate_deflate_compress_bound;
             break;
         case FORMAT_ZLIB:
-            compress_func = &libdeflate_zlib_compress;
+            args.func = &libdeflate_zlib_compress;
             compress_bound_func = &libdeflate_zlib_compress_bound;
             break;
         case FORMAT_GZIP:
-            compress_func = &libdeflate_gzip_compress;
+            args.func = &libdeflate_gzip_compress;
             compress_bound_func = &libdeflate_gzip_compress_bound;
             break;
         default:
             rb_raise(rb_eLibdefalteError, "unknown compressed data format: %d", FIX2INT(format));
     }
 
-    if (NIL_P(outbuf)) {
-        outbuf = rb_str_buf_new(compress_bound_func(c, RSTRING_LEN(str)));
-    } else {
+    if (!NIL_P(outbuf)) {
         StringValue(outbuf);
         rb_str_modify(outbuf);
     }
 
-    out_nbytes = compress_func(c,
-                               RSTRING_PTR(str),
-                               RSTRING_LEN(str),
-                               RSTRING_PTR(outbuf),
-                               rb_str_capacity(outbuf));
+    /* Shares the caller's buffer; a later write to str copies it instead. */
+    in = rb_str_new_frozen(str);
+    /* A bound-sized buffer cannot run out of space, so there is no retry. */
+    out = rb_str_buf_new(compress_bound_func(compressor->c, RSTRING_LEN(in)));
 
-    if (out_nbytes > 0) {
-        rb_str_set_len(outbuf, out_nbytes);
-        return outbuf;
+    args.level = compressor->level;
+    args.in = RSTRING_PTR(in);
+    args.in_nbytes = RSTRING_LEN(in);
+    args.out = RSTRING_PTR(out);
+    args.out_nbytes_avail = rb_str_capacity(out);
+    args.result = 0;
+
+    if (args.in_nbytes < NOGVL_MIN_BYTES) {
+        args.result = args.func(compressor->c, args.in, args.in_nbytes, args.out, args.out_nbytes_avail);
+    } else if (rb_thread_call_without_gvl(compress_without_gvl, &args, RUBY_UBF_IO, NULL) == NULL) {
+        rb_raise(rb_eLibdefalteError, "libdeflate_alloc_compressor: compression_level=%d", args.level);
     }
+    RB_GC_GUARD(in);
 
-    max_out_nbytes = compress_bound_func(c, RSTRING_LEN(str));
-    if (rb_str_capacity(outbuf) >= max_out_nbytes) {
+    if (args.result == 0) {
         rb_raise(rb_eLibdefalteError, "failed to compress data");
     }
 
-    rb_str_modify_expand(outbuf, max_out_nbytes - RSTRING_LEN(outbuf));
+    rb_str_set_len(out, args.result);
 
-    out_nbytes = compress_func(c,
-                               RSTRING_PTR(str),
-                               RSTRING_LEN(str),
-                               RSTRING_PTR(outbuf),
-                               rb_str_capacity(outbuf));
-
-    if (out_nbytes == 0) {
-        rb_raise(rb_eLibdefalteError, "failed to compress data");
+    if (NIL_P(outbuf)) {
+        return out;
     }
 
-    rb_str_set_len(outbuf, out_nbytes);
+    rb_str_resize(outbuf, 0);
+    rb_str_buf_append(outbuf, out);
 
     return outbuf;
 }

@@ -18,6 +18,11 @@ Or install it yourself as:
 
     $ gem install libdeflate
 
+The gem compiles the bundled libdeflate (see `ext/libdeflate/libdeflate/VERSION`)
+with a C compiler only: no cmake, no download. To link a system libdeflate instead:
+
+    $ gem install libdeflate -- --use-system-libraries
+
 ## Usage
 
 ```ruby
@@ -29,6 +34,10 @@ compressed_string = compressor.compress('Hello, World!')
 decompressor = Libdeflate::Decompressor.new
 decompressor.decompress(compressed_string)
 ```
+
+`Compressor#compress` releases the GVL for strings of 16 KiB or more, so other
+Ruby threads keep running while it compresses. A compressor can be shared by
+threads, and they compress such strings in parallel.
 
 ## Development
 

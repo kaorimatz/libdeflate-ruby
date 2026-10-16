@@ -2,6 +2,7 @@
 #define LIBDEFLATE_EXT_H 1
 
 #include "ruby.h"
+#include "ruby/thread.h"
 
 #include <libdeflate.h>
 
